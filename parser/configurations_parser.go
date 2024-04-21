@@ -50,6 +50,8 @@ type Prometheus struct {
 
 type Plugin struct {
 	OpenAPIChatGPTSecretKey string `yaml:"openAPIChatGPTSecretKey"`
+	OpenAPIChatGPTEndpoint  string `yaml:"openAPIChatGPTEndpoint"`
+	ClaudeSecretKey         string `yaml:"claudeSecretKey"`
 }
 
 // BeelzebubServiceConfiguration is the struct that contains the configurations of the honeypot service

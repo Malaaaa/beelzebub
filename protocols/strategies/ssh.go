@@ -63,9 +63,18 @@ func (sshStrategy *SSHStrategy) Init(beelzebubServiceConfiguration parser.Beelze
 							commandOutput := command.Handler
 
 							if command.Plugin == plugins.ChatGPTPluginName {
-								openAIGPTVirtualTerminal := plugins.Init(histories, beelzebubServiceConfiguration.Plugin.OpenAPIChatGPTSecretKey)
+								openAIGPTVirtualTerminal := plugins.Init(histories, beelzebubServiceConfiguration.Plugin.OpenAPIChatGPTSecretKey, beelzebubServiceConfiguration.Plugin.OpenAPIChatGPTEndpoint)
 
 								if commandOutput, err = openAIGPTVirtualTerminal.GetCompletions(commandInput); err != nil {
+									log.Errorf("Error GetCompletions: %s, %s", commandInput, err.Error())
+									commandOutput = "command not found"
+								}
+							}
+
+							if command.Plugin == plugins.ClaudePluginName {
+								virtualTerminal := plugins.Initialize(histories, beelzebubServiceConfiguration.Plugin.ClaudeSecretKey)
+
+								if commandOutput, err = virtualTerminal.GetCompletions(commandInput); err != nil {
 									log.Errorf("Error GetCompletions: %s, %s", commandInput, err.Error())
 									commandOutput = "command not found"
 								}

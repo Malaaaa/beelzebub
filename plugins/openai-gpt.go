@@ -23,6 +23,7 @@ type History struct {
 type openAIGPTVirtualTerminal struct {
 	Histories []History
 	openAIKey string
+	endpoint  string
 	client    *resty.Client
 }
 
@@ -57,10 +58,14 @@ type gptRequest struct {
 	Stop             []string `json:"stop"`
 }
 
-func Init(history []History, openAIKey string) *openAIGPTVirtualTerminal {
+func Init(history []History, openAIKey string, endpoint string) *openAIGPTVirtualTerminal {
+	if endpoint == "" {
+		endpoint = openAIGPTEndpoint // Use default if not set
+	}
 	return &openAIGPTVirtualTerminal{
 		Histories: history,
 		openAIKey: openAIKey,
+		endpoint:  endpoint,
 		client:    resty.New(),
 	}
 }
@@ -103,7 +108,7 @@ func (openAIGPTVirtualTerminal *openAIGPTVirtualTerminal) GetCompletions(command
 		SetBody(requestJson).
 		SetAuthToken(openAIGPTVirtualTerminal.openAIKey).
 		SetResult(&gptResponse{}).
-		Post(openAIGPTEndpoint)
+		Post(openAIGPTVirtualTerminal.endpoint)
 
 	if err != nil {
 		return "", err
