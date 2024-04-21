@@ -11,9 +11,9 @@ import (
 
 // Define constants and structures.
 const (
-	promptTemplate = "You will act as an Ubuntu Linux terminal. User commands and expected terminal outputs are provided. Your responses must be contained within a single code block, reflecting the terminal's behavior without additional explanations unless explicitly requested.\n\nA:pwd\n\nQ:/home/user\n\nA:cat hello.txt\n\nQ:world\n\nA:echo 1234\n\nQ:1234\n\nA:pwd\n\nQ:"
-	pluginName     = "ClaudePluginName"
-	apiEndpoint    = "https://api.anthropic.com/v1/completions"
+	promptTemplate   = "You will act as an Ubuntu Linux terminal. User commands and expected terminal outputs are provided. Your responses must be contained within a single code block, reflecting the terminal's behavior without additional explanations unless explicitly requested.\n\nA:pwd\n\nQ:/home/user\n\nA:cat hello.txt\n\nQ:world\n\nA:echo 1234\n\nQ:1234\n\nA:pwd\n\nQ:"
+	ClaudePluginName = "Claude3LinuxTerminal"
+	apiEndpoint      = "https://api.anthropic.com/v1/completions"
 )
 
 type VirtualTerminal struct {
