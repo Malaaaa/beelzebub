@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-resty/resty/v2"
+	log "github.com/sirupsen/logrus"
 	"strings"
 )
 
@@ -13,49 +14,65 @@ import (
 const (
 	promptTemplate   = "You will act as an Ubuntu Linux terminal. User commands and expected terminal outputs are provided. Your responses must be contained within a single code block, reflecting the terminal's behavior without additional explanations unless explicitly requested.\n\nA:pwd\n\nQ:/home/user\n\nA:cat hello.txt\n\nQ:world\n\nA:echo 1234\n\nQ:1234\n\nA:pwd\n\nQ:"
 	ClaudePluginName = "Claude3LinuxTerminal"
-	apiEndpoint      = "https://api.anthropic.com/v1/completions"
+	apiEndpoint      = "https://api.anthropic.com/v1/messages" // Updated API endpoint
 )
 
-type VirtualTerminal struct {
+type Claude3LinuxTerminal struct {
 	Histories []History
 	APIKey    string
 	Client    *resty.Client
 }
 
-type ResponseChoice struct {
-	Text         string      `json:"text"`
-	Logprobs     interface{} `json:"logprobs"`
-	FinishReason string      `json:"finish_reason"`
+type ClaudeResponse struct {
+	ID           string        `json:"id"`
+	Type         string        `json:"type"`
+	Role         string        `json:"role"`
+	Model        string        `json:"model"`
+	StopSequence interface{}   `json:"stop_sequence"`
+	Usage        Usage         `json:"usage"`
+	Content      []ContentItem `json:"content"`
+	StopReason   string        `json:"stop_reason"`
 }
 
-type APIResponse struct {
-	ID      string           `json:"id"`
-	Choices []ResponseChoice `json:"choices"`
-	Usage   struct {
-		TotalTokens int `json:"total_tokens"`
-	} `json:"usage"`
+// Usage nested structure
+type Usage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+}
+
+// ContentItem in the content array
+type ContentItem struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type Content struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type Message struct {
+	Role    string    `json:"role"`
+	Content []Content `json:"content"`
 }
 
 type APIRequest struct {
-	Model            string   `json:"model"`
-	Prompt           string   `json:"prompt"`
-	Temperature      float64  `json:"temperature"`
-	MaxTokens        int      `json:"max_tokens"`
-	TopP             float64  `json:"top_p"`
-	FrequencyPenalty float64  `json:"frequency_penalty"`
-	PresencePenalty  float64  `json:"presence_penalty"`
-	Stop             []string `json:"stop"`
+	Model       string    `json:"model"`
+	MaxTokens   int       `json:"max_tokens"`
+	Temperature float64   `json:"temperature"`
+	Messages    []Message `json:"messages"`
+	System      string    `json:"system"`
 }
 
-func Initialize(histories []History, apiKey string) *VirtualTerminal {
-	return &VirtualTerminal{
+func Initialize(histories []History, apiKey string) *Claude3LinuxTerminal {
+	return &Claude3LinuxTerminal{
 		Histories: histories,
 		APIKey:    apiKey,
 		Client:    resty.New(),
 	}
 }
 
-func (vt *VirtualTerminal) BuildPrompt(command string) string {
+func (vt *Claude3LinuxTerminal) BuildPrompt(command string) string {
 	var sb strings.Builder
 	sb.WriteString(promptTemplate)
 	for _, h := range vt.Histories {
@@ -65,20 +82,31 @@ func (vt *VirtualTerminal) BuildPrompt(command string) string {
 	return sb.String()
 }
 
-func (vt *VirtualTerminal) GetCompletions(command string) (string, error) {
+func (vt *Claude3LinuxTerminal) BuildMessages(command string) []Message {
+	return []Message{
+		{
+			Role: "user",
+			Content: []Content{
+				{
+					Type: "text",
+					Text: vt.BuildPrompt(command),
+				},
+			},
+		},
+	}
+}
+
+func (vt *Claude3LinuxTerminal) GetCompletions(command string) (string, error) {
 	if vt.APIKey == "" {
 		return "", errors.New("API key is missing")
 	}
 
 	reqData := APIRequest{
-		Model:            "claude-3-opus-20240229", // Ensure this matches your model
-		Prompt:           vt.BuildPrompt(command),
-		Temperature:      0,
-		MaxTokens:        100,
-		TopP:             1.0,
-		FrequencyPenalty: 0,
-		PresencePenalty:  0,
-		Stop:             []string{"\n"},
+		Model:       "claude-3-opus-20240229",
+		MaxTokens:   1024,
+		System:      "You will act as an Ubuntu Linux terminal. The user will type commands, and you are to reply with what the terminal should show. Your responses must be contained within a single code block. Do not provide explanations or type commands unless explicitly instructed by the user. Remember previous commands and consider their effects on subsequent outputs.\\n\\nA:pwd\\n\\nQ:/home/user\\n\\nA:pwd\\n\\nQ:",
+		Temperature: 0,
+		Messages:    vt.BuildMessages(command),
 	}
 
 	reqJSON, err := json.Marshal(reqData)
@@ -88,23 +116,20 @@ func (vt *VirtualTerminal) GetCompletions(command string) (string, error) {
 
 	response, err := vt.Client.R().
 		SetHeader("Content-Type", "application/json").
+		SetHeader("x-api-key", vt.APIKey).
+		SetHeader("anthropic-version", "2023-06-01").
 		SetBody(reqJSON).
-		SetAuthToken(vt.APIKey).
-		SetResult(new(APIResponse)). // Ensure you're creating a new instance of APIResponse
+		SetResult(new(ClaudeResponse)). // Ensure you're creating a new instance of APIResponse
 		Post(apiEndpoint)
 
 	if err != nil {
-		return "", fmt.Errorf("error making API request: %v", err)
+		return "", err
+	}
+	log.Debug(response)
+	if len(response.Result().(*ClaudeResponse).Content) == 0 {
+		return "", errors.New("no choices")
 	}
 
-	apiResponse, ok := response.Result().(*APIResponse) // Added type assertion with check
-	if !ok || apiResponse == nil {
-		return "", errors.New("invalid response format or nil response")
-	}
+	return strings.Replace(response.Result().(*ClaudeResponse).Content[0].Text, "```", "", -1), nil
 
-	if len(apiResponse.Choices) == 0 {
-		return "", errors.New("no completion choices returned by the API")
-	}
-
-	return apiResponse.Choices[0].Text, nil
 }

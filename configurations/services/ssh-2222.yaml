@@ -4,8 +4,10 @@ address: ":2222"
 description: "SSH interactive ChatGPT"
 commands:
   - regex: "^(.+)$"
-    plugin: ["OpenAIGPTLinuxTerminal", "Claude3LinuxTerminal"]
-  - serverVersion: "OpenSSH"
+    plugin:
+      - "OpenAIGPTLinuxTerminal"
+      - "Claude3LinuxTerminal"
+serverVersion: "OpenSSH"
 serverName: "ubuntu"
 passwordRegex: "^(root|qwerty|Smoker666|123456|jenkins|minecraft|sinus|alex|postgres|Ly123456)$"
 deadlineTimeoutSeconds: 60
